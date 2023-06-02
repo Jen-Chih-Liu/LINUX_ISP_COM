@@ -1,37 +1,43 @@
 
-#include <stdio.h>		/* Standard input/output definitions */
+#include <stdio.h> /* Standard input/output definitions */
 #include <stdlib.h>
-#include <string.h>		/* String function definitions */
-#include <unistd.h>		/* UNIX standard function definitions */
-#include <fcntl.h>		/* File control definitions */
-#include <errno.h>		/* Error number definitions */
-#include     <termios.h>    /*PPSIX ²×ºÝ±±¨î©w¸q*/
-#include     <sys/types.h>  
-#include     <sys/stat.h>   
+#include <string.h>	 /* String function definitions */
+#include <unistd.h>	 /* UNIX standard function definitions */
+#include <fcntl.h>	 /* File control definitions */
+#include <errno.h>	 /* Error number definitions */
+#include <termios.h> /     
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <time.h>
 
-//#define dbg_printf printf
-#define dbg_printf(...) 
+// #define dbg_printf printf
+#define dbg_printf(...)
 unsigned char send_buf[64];
 unsigned char recv_buf[64];
 #define Package_Size 64
 unsigned int PacketNumber;
 #define Time_Out_Value 1000
-int com_handler;
 
-//open  com port
+/**
+ * Opens the specified serial port.
+ *
+ * @param comport The name of the serial port device (e.g., "/dev/ttyUSB0")
+ * @return The file descriptor for the opened port, or -1 if an error occurs
+ */
 int open_port(char *comport)
 {
 	int fd, fset;
 	int save_flag;
-	//fd = open("/dev/ttyUSB0", O_RDWR);
+	// fd = open("/dev/ttyUSB0", O_RDWR);
+	//  Open the serial port for reading and writing
 	fd = open(comport, O_RDWR);
+	// Set the file status flags for the opened file descriptor
 	fset = fcntl(fd, F_SETFL, 0);
 	if (fset < 0)
 		printf("fcntl failed!\n");
 	else
 		printf("fcntl = %d\n", fset);
-
+	// Check if standard input is a terminal device
 	if (isatty(STDIN_FILENO) == 0)
 		printf("standard input is not a terminal device\n");
 	else
@@ -42,7 +48,14 @@ int open_port(char *comport)
 	return fd;
 }
 
-//write com port
+/**
+ * Writes the specified data to the given file descriptor (fd).
+ *
+ * @param fd The file descriptor to write to
+ * @param buf A pointer to the data buffer to be written
+ * @param len The length of the data to be written
+ * @return The number of successfully written bytes, or -1 if an error occurs
+ */
 int write_port(int fd, unsigned char *buf, size_t len)
 {
 	int num;
@@ -54,38 +67,50 @@ int write_port(int fd, unsigned char *buf, size_t len)
 
 		return num;
 }
-//read port
+/**
+ * Reads data from the specified serial port.
+ *
+ * @param fd The file descriptor of the serial port
+ * @param buf A pointer to the buffer to store the read data
+ * @param len The maximum length of the data to read
+ * @param tout A pointer to a timeval struct specifying the timeout duration
+ * @return The number of bytes read, or -1 if an error occurs
+ */
 int read_port(int fd, unsigned char *buf, size_t len, struct timeval *tout)
 {
 	fd_set inputs;
 	int num, num1, ret, i, j;
 	unsigned char tempbuffer[64];
-	num = 0;	
+	num = 0;
 	j = 0;
 	FD_ZERO(&inputs);
 	FD_SET(fd, &inputs);
 
 	ret = select(fd + 1, &inputs, (fd_set *)NULL, (fd_set *)NULL, tout);
-	//printf("select = %d\n", ret);
-	if(ret < 0) {
+	// printf("select = %d\n", ret);
+	if (ret < 0)
+	{
 		perror("select error!!");
 		return ret;
 	}
-	if (ret > 0) {
-		if (FD_ISSET(fd, &inputs)) {
+	if (ret > 0)
+	{
+		if (FD_ISSET(fd, &inputs))
+		{
 			num = read(fd, buf, len);
-			//printf("num t1:%d\n\r", num);
-			//num1 = read(fd, tempbuffer, 64 - num);
-			//printf("num t2:%d\n\r", num1);
+			// printf("num t1:%d\n\r", num);
+			// num1 = read(fd, tempbuffer, 64 - num);
+			// printf("num t2:%d\n\r", num1);
 		}
 	}
 
 	return num;
 }
 
-typedef enum {
-	RES_FALSE          = 0,		
-	RES_PASS,		    
+typedef enum
+{
+	RES_FALSE = 0,
+	RES_PASS,
 	RES_FILE_NO_FOUND,
 	RES_PROGRAM_FALSE,
 	RES_CONNECT,
@@ -98,14 +123,19 @@ typedef enum {
 	RES_SN_OK,
 	RES_DETECT_MCU,
 	RES_NO_DETECT,
-} ISP_STATE; 
+} ISP_STATE;
 
+/**
+ * Performs SN package UART communication.
+ *
+ * @return The ISP_STATE result of the communication
+ */
 ISP_STATE SN_PACKAGE_UART(void)
 {
 	struct timeval tout;
 	clock_t start_time, end_time;
 	float total_time = 0;
-	int send_num, recv_num; 
+	int send_num, recv_num;
 	tout.tv_sec = 1;
 	tout.tv_usec = 100 * 1000;
 	unsigned char cmd[Package_Size] = {
@@ -117,44 +147,46 @@ ISP_STATE SN_PACKAGE_UART(void)
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
 		((PacketNumber >> 24) & 0xff),
-		(PacketNumber & 0xff), 
+		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff) 
-	};
+		((PacketNumber >> 24) & 0xff)};
 	send_num = write_port(com_handler, cmd, Package_Size);
-	if (send_num != 64) {
+	if (send_num != 64)
+	{
 		printf("Writ flase %d bytes\n\r", send_num);
-		
-	}	
-	start_time = clock(); /* mircosecond */ 
+	}
+	start_time = clock(); /* mircosecond */
 	while (1)
 	{
 		recv_num = read_port(com_handler, recv_buf, Package_Size, &tout);
 		if (recv_num < 0)
 			printf("read failed! (%s)\n", strerror(errno));
-		if (recv_num != 64) {
+		if (recv_num != 64)
+		{
 			dbg_printf("read flase %d bytes\n\r", recv_num);
-		
 		}
 		dbg_printf("package: 0x%x\n\r", recv_buf[4]);
 		if ((recv_buf[4] | ((recv_buf[5] << 8) & 0xff00) | ((recv_buf[6] << 16) & 0xff0000) | ((recv_buf[7] << 24) & 0xff000000)) == (PacketNumber + 1))
 			break;
-		end_time = clock(); 
-		/* CLOCKS_PER_SEC is defined at time.h */ 
+		end_time = clock();
+		/* CLOCKS_PER_SEC is defined at time.h */
 		if ((end_time - start_time) > Time_Out_Value)
 			return RES_TIME_OUT;
 	}
 	PacketNumber += 2;
 	return RES_SN_OK;
 }
-
-ISP_STATE CHECK_UART_LINK(void)
+*Performs UART link checking.
+		*
+			*@ return The ISP_STATE result of the link checking *
+	/
+	ISP_STATE CHECK_UART_LINK(void)
 {
 	struct timeval tout;
 	clock_t start_time, end_time;
 	float total_time = 0;
-	int send_num, recv_num; 
+	int send_num, recv_num;
 	tout.tv_sec = 1;
 	tout.tv_usec = 1000;
 	int i;
@@ -167,47 +199,50 @@ ISP_STATE CHECK_UART_LINK(void)
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
 		((PacketNumber >> 24) & 0xff),
-		(PacketNumber & 0xff), 
+		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff) 
-	};
-	
-	//start_time = clock(); /* mircosecond */ 
-	while(1)
+		((PacketNumber >> 24) & 0xff)};
+
+	// start_time = clock(); /* mircosecond */
+	while (1)
 	{
-		usleep(50000); 
+		usleep(50000);
 		send_num = write_port(com_handler, cmd, Package_Size);
-		if (send_num != 64) {
+		if (send_num != 64)
+		{
 			printf("Writ flase %d bytes\n\r", send_num);
-		
-		}	
+		}
 		recv_num = read_port(com_handler, recv_buf, Package_Size, &tout);
 		if (recv_num < 0)
 			printf("read failed! (%s)\n", strerror(errno));
-		if (recv_num != 64) {
+		if (recv_num != 64)
+		{
 			dbg_printf("read flase %d bytes\n\r", recv_num);
-		
 		}
 		printf("package: 0x%x\n\r", i++);
 		if ((recv_buf[4] | ((recv_buf[5] << 8) & 0xff00) | ((recv_buf[6] << 16) & 0xff0000) | ((recv_buf[7] << 24) & 0xff000000)) == (PacketNumber + 1))
 			break;
-		//end_time = clock(); 
-		/* CLOCKS_PER_SEC is defined at time.h */ 
-		//if ((end_time - start_time) > Time_Out_Value)
-			//return RES_TIME_OUT;
+		// end_time = clock();
+		/* CLOCKS_PER_SEC is defined at time.h */
+		// if ((end_time - start_time) > Time_Out_Value)
+		// return RES_TIME_OUT;
 	}
 	PacketNumber += 2;
 	return RES_SN_OK;
 }
 
-
+/**
+ * Reads the firmware version via UART.
+ *
+ * @return The firmware version as an unsigned integer
+ */
 unsigned int READFW_VERSION_UART(void)
 {
 	struct timeval tout;
 	clock_t start_time, end_time;
 	float total_time = 0;
-	int send_num, recv_num; 
+	int send_num, recv_num;
 	tout.tv_sec = 1;
 	tout.tv_usec = 100 * 1000;
 	unsigned char cmd[Package_Size] = {
@@ -218,29 +253,27 @@ unsigned int READFW_VERSION_UART(void)
 		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff)
-	};
+		((PacketNumber >> 24) & 0xff)};
 	send_num = write_port(com_handler, cmd, Package_Size);
-	if (send_num != 64) {
+	if (send_num != 64)
+	{
 		printf("Writ fale %d bytes\n\r", send_num);
-		
-	}					
-	start_time = clock(); /* mircosecond */  
+	}
+	start_time = clock(); /* mircosecond */
 	while (1)
 	{
 		recv_num = read_port(com_handler, recv_buf, Package_Size, &tout);
 		if (recv_num < 0)
 			printf("read failed! (%s)\n", strerror(errno));
-	
+
 		dbg_printf("package: 0x%x\n\r", recv_buf[4]);
 		if ((recv_buf[4] | ((recv_buf[5] << 8) & 0xff00) | ((recv_buf[6] << 16) & 0xff0000) | ((recv_buf[7] << 24) & 0xff000000)) == (PacketNumber + 1))
 			break;
 
-		end_time = clock(); 
-		/* CLOCKS_PER_SEC is defined at time.h */ 
+		end_time = clock();
+		/* CLOCKS_PER_SEC is defined at time.h */
 		if ((end_time - start_time) > Time_Out_Value)
 			return 0;
-
 	}
 	dbg_printf("fw version:0x%x\n\r", recv_buf[8]);
 	dbg_printf("\n\r");
@@ -248,8 +281,11 @@ unsigned int READFW_VERSION_UART(void)
 	return (recv_buf[8] | ((recv_buf[9] << 8) & 0xff00) | ((recv_buf[10] << 16) & 0xff0000) | ((recv_buf[11] << 24) & 0xff000000));
 }
 
-
-
+/**
+ * Sets the serial port options.
+ *
+ * @param fd The file descriptor of the serial port
+ */
 void set_opt(int fd)
 {
 	struct termios options;
@@ -258,7 +294,7 @@ void set_opt(int fd)
 
 	cfsetispeed(&options, B115200); /* (void) is to stop warning in cygwin */
 
-	cfsetospeed(&options, B115200); 
+	cfsetospeed(&options, B115200);
 
 	options.c_cflag &= ~CSIZE;
 
@@ -285,33 +321,35 @@ void set_opt(int fd)
 	options.c_cflag |= (CLOCAL | CREAD);
 
 	tcsetattr(fd, TCSAFLUSH, &options);
-	
 }
-
+/**
+ * Reads the PID (Product ID) from the UART.
+ *
+ * @return The result of the operation (RES_PASS if successful)
+ */
 ISP_STATE READ_PID_UART(void)
 {
 	clock_t start_time, end_time;
 	struct timeval tout;
-	int send_num, recv_num; 
+	int send_num, recv_num;
 	tout.tv_sec = 1;
 	tout.tv_usec = 100 * 1000;
-	float total_time = 0; 
+	float total_time = 0;
 	unsigned char cmd[Package_Size] = {
 		0xB1,
 		0,
 		0,
 		0,
-		(PacketNumber & 0xff), 
+		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff) 
-	};	                    
+		((PacketNumber >> 24) & 0xff)};
 	send_num = write_port(com_handler, cmd, Package_Size);
-	if (send_num != 64) {
+	if (send_num != 64)
+	{
 		printf("Writ fale %d bytes\n\r", send_num);
-		
-	}						
-	start_time = clock(); /* mircosecond */ 
+	}
+	start_time = clock(); /* mircosecond */
 	while (1)
 	{
 		recv_num = read_port(com_handler, recv_buf, Package_Size, &tout);
@@ -321,8 +359,8 @@ ISP_STATE READ_PID_UART(void)
 		if ((recv_buf[4] | ((recv_buf[5] << 8) & 0xff00) | ((recv_buf[6] << 16) & 0xff0000) | ((recv_buf[7] << 24) & 0xff000000)) == (PacketNumber + 1))
 			break;
 
-		end_time = clock(); 
-		/* CLOCKS_PER_SEC is defined at time.h */ 
+		end_time = clock();
+		/* CLOCKS_PER_SEC is defined at time.h */
 		if ((end_time - start_time) > Time_Out_Value)
 			return RES_TIME_OUT;
 	}
@@ -356,32 +394,33 @@ ISP_STATE READ_PID_UART(void)
 	return RES_PASS;
 }
 
-
+/**
+ * Reads the configuration from the UART.
+ */
 void READ_CONFIG_UART(void)
 {
 	clock_t start_time, end_time;
 	struct timeval tout;
-	int send_num, recv_num; 
+	int send_num, recv_num;
 	tout.tv_sec = 1;
 	tout.tv_usec = 100 * 1000;
-	float total_time = 0; 
+	float total_time = 0;
 
 	unsigned char cmd[Package_Size] = {
 		0xa2,
 		0,
 		0,
-		0, 
-		(PacketNumber & 0xff), 
+		0,
+		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
-		((PacketNumber >> 16) & 0xff), 
-		((PacketNumber >> 24) & 0xff) 
-	};
+		((PacketNumber >> 16) & 0xff),
+		((PacketNumber >> 24) & 0xff)};
 	send_num = write_port(com_handler, cmd, Package_Size);
-	if (send_num != 64) {
+	if (send_num != 64)
+	{
 		printf("Writ fale %d bytes\n\r", send_num);
-		
 	}
-	start_time = clock(); /* mircosecond */ 
+	start_time = clock(); /* mircosecond */
 	while (1)
 	{
 		recv_num = read_port(com_handler, recv_buf, Package_Size, &tout);
@@ -390,8 +429,8 @@ void READ_CONFIG_UART(void)
 		dbg_printf("package: 0x%x\n\r", recv_buf[4]);
 		if ((recv_buf[4] | ((recv_buf[5] << 8) & 0xff00) | ((recv_buf[6] << 16) & 0xff0000) | ((recv_buf[7] << 24) & 0xff000000)) == (PacketNumber + 1))
 			break;
-		end_time = clock(); 
-		/* CLOCKS_PER_SEC is defined at time.h */ 
+		end_time = clock();
+		/* CLOCKS_PER_SEC is defined at time.h */
 		if ((end_time - start_time) > Time_Out_Value)
 		{
 			printf("Time out\n\r");
@@ -403,85 +442,89 @@ void READ_CONFIG_UART(void)
 	printf("\n\r");
 	PacketNumber += 2;
 }
-
+/**
+ * Runs the program from APROM to LDROM using UART.
+ */
 void RUN_TO_LDROM_UART(void)
 {
 
 	struct timeval tout;
 	int send_num;
-	
+
 	tout.tv_sec = 1;
 	tout.tv_usec = 100 * 1000;
 	unsigned char cmd[Package_Size] = {
 		0xAC,
-		0, 
 		0,
 		0,
-		(PacketNumber & 0xff), 
-		((PacketNumber >> 8) & 0xff), 
+		0,
+		(PacketNumber & 0xff),
+		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff) 
-	};
+		((PacketNumber >> 24) & 0xff)};
 	send_num = write_port(com_handler, cmd, Package_Size);
-	if (send_num != 64) {
+	if (send_num != 64)
+	{
 		printf("Writ fale %d bytes\n\r", send_num);
-		
-	}					
-	PacketNumber += 2;	
+	}
+	PacketNumber += 2;
 }
 
-
+/**
+ * Runs the program from LDROM to APROM using UART.
+ */
 void RUN_TO_APROM_UART(void)
 {
 
 	struct timeval tout;
 	int send_num;
-	
+
 	tout.tv_sec = 1;
 	tout.tv_usec = 100 * 1000;
 	unsigned char cmd[Package_Size] = {
 		0xab,
-		0, 
 		0,
 		0,
-		(PacketNumber & 0xff), 
-		((PacketNumber >> 8) & 0xff), 
+		0,
+		(PacketNumber & 0xff),
+		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff) 
-	};
+		((PacketNumber >> 24) & 0xff)};
 	send_num = write_port(com_handler, cmd, Package_Size);
-	if (send_num != 64) {
+	if (send_num != 64)
+	{
 		printf("Writ fale %d bytes\n\r", send_num);
-		
-	}					
-	PacketNumber += 2;	
+	}
+	PacketNumber += 2;
 }
 int mode;
+/**
+ * Reads the flash run areamode using UART.
+ */
 void READ_FLASH_RUN_MODE(void)
 {
 	clock_t start_time, end_time;
 	struct timeval tout;
-	int send_num, recv_num; 
+	int send_num, recv_num;
 	tout.tv_sec = 1;
 	tout.tv_usec = 100 * 1000;
-	float total_time = 0; 
+	float total_time = 0;
 
 	unsigned char cmd[Package_Size] = {
 		0xCA,
 		0,
 		0,
-		0, 
-		(PacketNumber & 0xff), 
+		0,
+		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
-		((PacketNumber >> 16) & 0xff), 
-		((PacketNumber >> 24) & 0xff) 
-	};
+		((PacketNumber >> 16) & 0xff),
+		((PacketNumber >> 24) & 0xff)};
 	send_num = write_port(com_handler, cmd, Package_Size);
-	if (send_num != 64) {
+	if (send_num != 64)
+	{
 		printf("Writ fale %d bytes\n\r", send_num);
-		
 	}
-	start_time = clock(); /* mircosecond */ 
+	start_time = clock(); /* mircosecond */
 	while (1)
 	{
 		recv_num = read_port(com_handler, recv_buf, Package_Size, &tout);
@@ -490,8 +533,8 @@ void READ_FLASH_RUN_MODE(void)
 		dbg_printf("package: 0x%x\n\r", recv_buf[4]);
 		if ((recv_buf[4] | ((recv_buf[5] << 8) & 0xff00) | ((recv_buf[6] << 16) & 0xff0000) | ((recv_buf[7] << 24) & 0xff000000)) == (PacketNumber + 1))
 			break;
-		end_time = clock(); 
-		/* CLOCKS_PER_SEC is defined at time.h */ 
+		end_time = clock();
+		/* CLOCKS_PER_SEC is defined at time.h */
 		if ((end_time - start_time) > Time_Out_Value)
 		{
 			printf("Time out\n\r");
@@ -499,7 +542,7 @@ void READ_FLASH_RUN_MODE(void)
 		}
 	}
 	printf("mode: 0x%x\n\r", (recv_buf[8] | ((recv_buf[9] << 8) & 0xff00) | ((recv_buf[10] << 16) & 0xff0000) | ((recv_buf[11] << 24) & 0xff000000)));
-	if ((recv_buf[8] | ((recv_buf[9] << 8) & 0xff00) | ((recv_buf[10] << 16) & 0xff0000) | ((recv_buf[11] << 24) & 0xff000000)) == 2)				
+	if ((recv_buf[8] | ((recv_buf[9] << 8) & 0xff00) | ((recv_buf[10] << 16) & 0xff0000) | ((recv_buf[11] << 24) & 0xff000000)) == 2)
 	{
 		printf("The MCU run in LDROM\n\r");
 		mode = 2;
@@ -508,64 +551,88 @@ void READ_FLASH_RUN_MODE(void)
 	{
 		printf("run in APROM");
 		mode = 1;
-	}	
+	}
 	printf("\n\r");
 	PacketNumber += 2;
 }
 
 unsigned int file_totallen;
 unsigned int file_checksum;
-#define CMD_UPDATE_APROM	0x000000A0
-
+#define CMD_UPDATE_APROM 0x000000A0
+/**
+ * Calculates the checksum of a buffer.
+ *
+ * @param buf The buffer containing the data.
+ * @param len The length of the buffer.
+ * @return The checksum value.
+ */
 unsigned short Checksum(unsigned char *buf, int len)
 {
 	int i;
 	unsigned short c;
 
-	for (c = 0, i = 0; i < len; i++) {
+	for (c = 0, i = 0; i < len; i++)
+	{
 		c += buf[i];
 	}
 	return (c);
 }
-
+/**
+ * Copies a specified number of bytes from source to destination.
+ *
+ * @param dest The destination memory location.
+ * @param src The source memory location.
+ * @param size The number of bytes to copy.
+ */
 void WordsCpy(void *dest, void *src, unsigned int size)
 {
 	unsigned char *pu8Src, *pu8Dest;
 	unsigned int i;
-    
+
 	pu8Dest = (unsigned char *)dest;
-	pu8Src  = (unsigned char *)src;
-    
+	pu8Src = (unsigned char *)src;
+
 	for (i = 0; i < size; i++)
-		pu8Dest[i] = pu8Src[i]; 
+		pu8Dest[i] = pu8Src[i];
 }
 unsigned short gcksum;
-int SendData(void)
+
+*Sends data through a port.
+	 *
+		 *@ return 1 if the data is sent successfully,
+	0 otherwise.
+			* /
+		int SendData(void)
 {
 	int Result;
-	int send_num; 
+	int send_num;
 	gcksum = Checksum(send_buf, Package_Size);
 
 	send_num = write_port(com_handler, send_buf, Package_Size);
-	if (send_num != 64) {
+	if (send_num != 64)
+	{
 		printf("Writ fale %d bytes\n\r", send_num);
 		return 0;
-	}				
+	}
 	return 1;
 }
-
+/**
+ * Receives data from a port.
+ *
+ * @return 1 if the data is received successfully, 0 otherwise.
+ */
 int RcvData(void)
 {
 	clock_t start_time, end_time;
 	struct timeval tout;
-	int send_num, recv_num; 
+	int send_num, recv_num;
 	tout.tv_sec = 1;
 	tout.tv_usec = 100 * 1000;
-	float total_time = 0; 
+	float total_time = 0;
 	int Result;
 	unsigned short lcksum, i;
 	unsigned char *pBuf;
-	start_time = clock(); /* mircosecond */ 
+	start_time = clock(); /* mircosecond */
 	while (1)
 	{
 		recv_num = read_port(com_handler, recv_buf, Package_Size, &tout);
@@ -574,27 +641,27 @@ int RcvData(void)
 		dbg_printf("package: 0x%x\n\r", recv_buf[4]);
 		if ((recv_buf[4] | ((recv_buf[5] << 8) & 0xff00) | ((recv_buf[6] << 16) & 0xff0000) | ((recv_buf[7] << 24) & 0xff000000)) == (PacketNumber))
 			break;
-		end_time = clock(); 
-		/* CLOCKS_PER_SEC is defined at time.h */ 
+		end_time = clock();
+		/* CLOCKS_PER_SEC is defined at time.h */
 		if ((end_time - start_time) > Time_Out_Value)
 		{
 			printf("Time out\n\r");
 			break;
 		}
 	}
-	
+
 	pBuf = recv_buf;
 	WordsCpy(&lcksum, pBuf, 2);
 	pBuf += 4;
 
-	//if (inpw(pBuf) != PacketNumber)
+	// if (inpw(pBuf) != PacketNumber)
 	//{
 	//	dbg_printf("g_packno=%d rcv %d\n", g_packno, inpw(pBuf));
 	//	Result = 0;
-	//}
-	//else
+	// }
+	// else
 	//{
-		if(lcksum != gcksum)
+	if (lcksum != gcksum)
 	{
 		dbg_printf("gcksum=%x lcksum=%x\n", gcksum, lcksum);
 		Result = 0;
@@ -606,18 +673,20 @@ int RcvData(void)
 	return Result;
 }
 
-
-
-
+/**
+ * Receives data from a port without a timeout mechanism.
+ *
+ * @return 1 if the data is received successfully, 0 otherwise.
+ */
 
 int RcvData_without_timeout(void)
 {
 	clock_t start_time, end_time;
 	struct timeval tout;
-	int send_num, recv_num; 
+	int send_num, recv_num;
 	tout.tv_sec = 1;
 	tout.tv_usec = 100 * 1000;
-	float total_time = 0; 
+	float total_time = 0;
 	int Result;
 	unsigned short lcksum, i;
 	unsigned char *pBuf;
@@ -629,27 +698,27 @@ int RcvData_without_timeout(void)
 		dbg_printf("package: 0x%x\n\r", recv_buf[4]);
 		if ((recv_buf[4] | ((recv_buf[5] << 8) & 0xff00) | ((recv_buf[6] << 16) & 0xff0000) | ((recv_buf[7] << 24) & 0xff000000)) == (PacketNumber))
 			break;
-		//end_time = clock(); 
-		/* CLOCKS_PER_SEC is defined at time.h */ 
-		//if ((end_time - start_time) > Time_Out_Value)
+		// end_time = clock();
+		/* CLOCKS_PER_SEC is defined at time.h */
+		// if ((end_time - start_time) > Time_Out_Value)
 		//{
 		//	printf("Time out\n\r");
 		//	break;
-	//	}
+		//	}
 	}
-	
+
 	pBuf = recv_buf;
 	WordsCpy(&lcksum, pBuf, 2);
 	pBuf += 4;
 
-	//if (inpw(pBuf) != PacketNumber)
+	// if (inpw(pBuf) != PacketNumber)
 	//{
 	//	dbg_printf("g_packno=%d rcv %d\n", g_packno, inpw(pBuf));
 	//	Result = 0;
-	//}
-	//else
+	// }
+	// else
 	//{
-	if(lcksum != gcksum)
+	if (lcksum != gcksum)
 	{
 		dbg_printf("gcksum=%x lcksum=%x\n", gcksum, lcksum);
 		Result = 0;
@@ -658,40 +727,41 @@ int RcvData_without_timeout(void)
 	PacketNumber++;
 	Result = 1;
 	//}
-		return Result;
+	return Result;
 }
 
-
+/**
+ * Writes the checksum to the device and receives the response.
+ */
 void WRITE_CHECKSUM(void)
 {
 	clock_t start_time, end_time;
 	struct timeval tout;
-	int send_num, recv_num; 
+	int send_num, recv_num;
 	tout.tv_sec = 1;
 	tout.tv_usec = 100 * 1000;
-	float total_time = 0; 
+	float total_time = 0;
 
 	unsigned char cmd[Package_Size] = {
 		0xC9,
 		0,
 		0,
-		0, 
-		(PacketNumber & 0xff), 
+		0,
+		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
-		((PacketNumber >> 16) & 0xff), 
-		((PacketNumber >> 24) & 0xff) 
-	};
+		((PacketNumber >> 16) & 0xff),
+		((PacketNumber >> 24) & 0xff)};
 	unsigned int buffer[2];
 	buffer[0] = file_totallen;
 	buffer[1] = file_checksum;
 	WordsCpy(cmd + 8, buffer, 4);
 	WordsCpy(cmd + 12, buffer + 1, 4);
 	send_num = write_port(com_handler, cmd, Package_Size);
-	if (send_num != 64) {
+	if (send_num != 64)
+	{
 		printf("Writ fale %d bytes\n\r", send_num);
-		
 	}
-	start_time = clock(); /* mircosecond */ 
+	start_time = clock(); /* mircosecond */
 	while (1)
 	{
 		recv_num = read_port(com_handler, recv_buf, Package_Size, &tout);
@@ -700,8 +770,8 @@ void WRITE_CHECKSUM(void)
 		dbg_printf("package: 0x%x\n\r", buffer[4]);
 		if ((recv_buf[4] | ((recv_buf[5] << 8) & 0xff00) | ((recv_buf[6] << 16) & 0xff0000) | ((recv_buf[7] << 24) & 0xff000000)) == (PacketNumber + 1))
 			break;
-		end_time = clock(); 
-		/* CLOCKS_PER_SEC is defined at time.h */ 
+		end_time = clock();
+		/* CLOCKS_PER_SEC is defined at time.h */
 		if ((end_time - start_time) > Time_Out_Value)
 		{
 			printf("Time out\n\r");
@@ -709,42 +779,49 @@ void WRITE_CHECKSUM(void)
 		}
 	}
 	printf("mode: 0x%x\n\r", (recv_buf[8] | ((recv_buf[9] << 8) & 0xff00) | ((recv_buf[10] << 16) & 0xff0000) | ((recv_buf[11] << 24) & 0xff000000)));
-	if ((recv_buf[8] | ((recv_buf[9] << 8) & 0xff00) | ((recv_buf[10] << 16) & 0xff0000) | ((recv_buf[11] << 24) & 0xff000000)) == 2)				
+	if ((recv_buf[8] | ((recv_buf[9] << 8) & 0xff00) | ((recv_buf[10] << 16) & 0xff0000) | ((recv_buf[11] << 24) & 0xff000000)) == 2)
 	{
 		printf("The MCU run in LDROM\n\r");
 	}
 	else
 	{
 		printf("run in APROM");
-	}	
+	}
 	printf("\n\r");
 	PacketNumber += 2;
 }
 
-
-
-int CmdUpdateAprom(char *filename)
+*Function : CmdUpdateAprom * -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --*This function performs the update of the APROM on the device
+																														   *using the specified file.
+																															   *
+																																   *Parameters : *-filename : The name of the file containing the APROM data
+																																								  *
+																																									  *Returns : *-Result : 1 if the update is successful,
+	0 otherwise
+			************************************************************** /
+		int CmdUpdateAprom(char *filename)
 {
 	int Result = 1;
 	unsigned int i, j;
 	unsigned long cmdData, startaddr;
 	unsigned short get_cksum;
-	//unsigned char Buff[256];
-	//unsigned int s1,cnt;
-	//for uart auto detect;
+	// unsigned char Buff[256];
+	// unsigned int s1,cnt;
+	// for uart auto detect;
 	FILE *fp;
-		
-	//if ((fp = fopen("//home//pi//aprom.bin", "rb")) == NULL)
-	if((fp = fopen(filename, "rb")) == NULL)
+
+	// if ((fp = fopen("//home//pi//aprom.bin", "rb")) == NULL)
+	if ((fp = fopen(filename, "rb")) == NULL)
 	{
 		printf("APROM FILE OPEN FALSE\n\r");
 		Result = 0;
 		return Result;
-	}	
-	//get file size
+	}
+	// get file size
 	fseek(fp, 0, SEEK_END);
 	file_totallen = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
+	// Calculate file checksum
 	file_checksum = 0;
 	for (i = 0; i < file_totallen; i++)
 	{
@@ -754,39 +831,37 @@ int CmdUpdateAprom(char *filename)
 	printf("file size=%d\n\r", file_totallen);
 	printf("file checksum=0x%x\n\r", file_checksum & 0xffff);
 	fseek(fp, 0, SEEK_SET);
-	
+
 	memset(send_buf, 0, Package_Size);
-	cmdData = CMD_UPDATE_APROM;  //CMD_UPDATE_APROM
+	cmdData = CMD_UPDATE_APROM; // CMD_UPDATE_APROM
 	WordsCpy(send_buf + 0, &cmdData, 4);
 	WordsCpy(send_buf + 4, &PacketNumber, 4);
 	PacketNumber++;
-	//start address
-		startaddr = 0;
+	// start address
+	startaddr = 0;
 	WordsCpy(send_buf + 8, &startaddr, 4);
 	WordsCpy(send_buf + 12, &file_totallen, 4);
-	
+
 	fread(&send_buf[16], sizeof(char), 48, fp);
 	usleep(1000000);
-	//send CMD_UPDATE_APROM
+	// send CMD_UPDATE_APROM
 	Result = SendData();
 	if (Result == 0)
 		goto out1;
-	
 
-	//sleep(1); //for erase time, sleep 1 sec
+	// sleep(1); //for erase time, sleep 1 sec
 	Result = RcvData();
-	//Result = RcvData_without_timeout();
-	if(Result == 0)
+	// Result = RcvData_without_timeout();
+	if (Result == 0)
 		goto out1;
 #if 1
 	for (i = 48; i < file_totallen; i = i + 56)
 	{
 
-	
 		printf("Process=%.2f \r", (float)((float)i / (float)file_totallen) * 100);
 
-		//clear buffer
-for(j = 0 ; j < 64 ; j++)
+		// clear buffer
+		for (j = 0; j < 64; j++)
 		{
 			send_buf[j] = 0;
 		}
@@ -794,34 +869,34 @@ for(j = 0 ; j < 64 ; j++)
 		WordsCpy(send_buf + 4, &PacketNumber, 4);
 		PacketNumber++;
 		if ((file_totallen - i) > 56)
-		{			
-			//f_read(&file1, &sendbuf[8], 56, &s1);
+		{
+			// f_read(&file1, &sendbuf[8], 56, &s1);
 			fread(&send_buf[8], sizeof(char), 56, fp);
 			usleep(50000);
-			//read check  package
+			// read check  package
 			Result = SendData();
 			if (Result == 0)
 				goto out1;
 			Result = RcvData();
 			if (Result == 0)
-				goto out1;			
+				goto out1;
 		}
 		else
 		{
-			
+
 			fread(&send_buf[8], sizeof(char), file_totallen - i, fp);
 			usleep(50000);
-			//read target chip checksum
-		  Result = SendData();
+			// read target chip checksum
+			Result = SendData();
 			if (Result == 0)
 				goto out1;
 			Result = RcvData();
-			if (Result == 0)			
-				goto out1;	
-			
+			if (Result == 0)
+				goto out1;
+
 			WordsCpy(&get_cksum, recv_buf + 8, 2);
-			if ((file_checksum & 0xffff) != get_cksum)	
-			{			 
+			if ((file_checksum & 0xffff) != get_cksum)
+			{
 				Result = 0;
 				return Result;
 			}
@@ -830,63 +905,59 @@ for(j = 0 ; j < 64 ; j++)
 #endif
 out1:
 	return Result;
-
 }
-
-
-
 
 int main(int argc, char *argv[])
 {
-	
-	PacketNumber = 1;
-	com_handler = open_port(argv[1]);
-	if (com_handler < 0) {
-		perror("open_port error!\n");
+	PacketNumber = 1;				  // Initialize packet number
+	com_handler = open_port(argv[1]); // Open the specified COM port
+	if (com_handler < 0)
+	{
+		perror("open_port error!\n"); // Print error message if port opening fails
 		return -1;
 	}
-	printf("the com port open!!\n\r");
+	printf("the com port open!!\n\r"); // Print success message for port opening
 
-	set_opt(com_handler);
+	set_opt(com_handler); // Set port options
 
-	CHECK_UART_LINK();
+	CHECK_UART_LINK(); // Check UART link status
+	usleep(50000);	   // Wait for 50 milliseconds
+
+	if (SN_PACKAGE_UART() == RES_SN_OK)
+		printf("connect 1\n\r"); // Print success message for first connection
+
+	usleep(50000);
+	if (SN_PACKAGE_UART() == RES_SN_OK)
+		printf("connect 2 \n\r"); // Print success message for second connection
+
+	usleep(50000);
+	printf("FW version:0x%x\n\r", READFW_VERSION_UART()); // Read and print firmware version
+
+	if (READ_PID_UART() == RES_FALSE)
+	{
+		printf("CHIP NO FOUND\n\r"); // Print error message if chip is not found
+		goto EXIT;
+	}
+
+	usleep(50000);
+	READ_CONFIG_UART(); // Read configuration from UART
 	usleep(50000);
 
-		if (SN_PACKAGE_UART() == RES_SN_OK)	
-			printf("connect 1\n\r");
+	if (CmdUpdateAprom(argv[2]) == 1)
+	{
+		printf("Process=%.2f \r", 100.0); // Print progress information
+		printf("programmer pass\n\r");	  // Print success message for programming
+	}
+	else
+	{
+		printf("programmer flase\n\r"); // Print error message for programming failure
+		goto EXIT;
+	}
 
-		usleep(50000); 
-		if (SN_PACKAGE_UART() == RES_SN_OK)	
-			printf("connect 2 \n\r");
-	
-		usleep(50000); 
-		printf("FW version:0x%x\n\r", READFW_VERSION_UART());
-		usleep(50000); 
-		if (READ_PID_UART() == RES_FALSE)
-		{			
-			printf("CHIP NO FOUND\n\r");
-			goto EXIT;
-		}
-		usleep(50000); 
-		READ_CONFIG_UART();
-		usleep(50000);  
-	
-		if (CmdUpdateAprom(argv[2]) == 1)
-		{
-			printf("Process=%.2f \r", 100.0);
-			printf("programmer pass\n\r");
-		}
-		else
-		{
-			printf("programmer flase\n\r");
-			goto EXIT;
-		}
-	
-	
-		usleep(50000); 
-		RUN_TO_APROM_UART();   //mcu jump to aprom and run
-	
+	usleep(50000);
+	RUN_TO_APROM_UART(); // Jump to APROM and run
 
 EXIT:
-	close(com_handler);
+	close(com_handler); // Close the COM port
+	return 0;
 }
