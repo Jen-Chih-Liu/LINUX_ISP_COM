@@ -1,4 +1,3 @@
-
 #include <stdio.h> /* Standard input/output definitions */
 #include <stdlib.h>
 #include <string.h>	 /* String function definitions */
@@ -9,6 +8,55 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <time.h>
+//this code is show mcu information
+// ---- get os info ---- //
+void getOsInfo(void)
+{
+	FILE *fp = fopen("/proc/version", "r");
+	if (NULL == fp)
+		printf("failed to open version\n");
+	char szTest[1000] = { 0 };
+	while (!feof(fp))
+	{
+		memset(szTest, 0, sizeof(szTest));
+		fgets(szTest, sizeof(szTest) - 1, fp);    // leave out \n
+		printf("%s\n\r", szTest);
+	}
+	fclose(fp);
+}
+
+
+// ---- get cpu info ---- //
+void getCpuInfo(void)
+{
+	FILE *fp = fopen("/proc/cpuinfo", "r");
+	if (NULL == fp)
+		printf("failed to open cpuinfo\n");
+	char szTest[1000] = { 0 };
+	// read file line by line
+	while(!feof(fp))
+	{
+		memset(szTest, 0, sizeof(szTest));
+		fgets(szTest, sizeof(szTest) - 1, fp);    // leave out \n
+		printf("%s\n\r", szTest);
+	}
+	fclose(fp);
+}
+// ---- get memory info ---- //
+void getMemoryInfo(void)
+{
+	FILE *fp = fopen("/proc/meminfo", "r");
+	if (NULL == fp)
+		printf("failed to open meminfo\n");
+	char szTest[1000] = { 0 };
+	while (!feof(fp))
+	{
+		memset(szTest, 0, sizeof(szTest));
+		fgets(szTest, sizeof(szTest) - 1, fp);
+		printf("%s\n\r", szTest);
+	}
+	fclose(fp);
+}
 
 // #define dbg_printf printf
 #define dbg_printf(...)
@@ -17,7 +65,7 @@ unsigned char recv_buf[64];
 #define Package_Size 64
 unsigned int PacketNumber;
 #define Time_Out_Value 1000
-
+int com_handler;
 /**
  * Opens the specified serial port.
  *
@@ -38,7 +86,7 @@ int open_port(char *comport)
 	else
 		printf("fcntl = %d\n", fset);
 	// Check if standard input is a terminal device
-	if (isatty(STDIN_FILENO) == 0)
+	if(isatty(STDIN_FILENO) == 0)
 		printf("standard input is not a terminal device\n");
 	else
 		printf("isatty success!\n");
@@ -88,7 +136,7 @@ int read_port(int fd, unsigned char *buf, size_t len, struct timeval *tout)
 
 	ret = select(fd + 1, &inputs, (fd_set *)NULL, (fd_set *)NULL, tout);
 	// printf("select = %d\n", ret);
-	if (ret < 0)
+	if(ret < 0)
 	{
 		perror("select error!!");
 		return ret;
@@ -96,20 +144,37 @@ int read_port(int fd, unsigned char *buf, size_t len, struct timeval *tout)
 	if (ret > 0)
 	{
 		if (FD_ISSET(fd, &inputs))
-		{
+#if 0
 			num = read(fd, buf, len);
-			// printf("num t1:%d\n\r", num);
-			// num1 = read(fd, tempbuffer, 64 - num);
-			// printf("num t2:%d\n\r", num1);
-		}
-	}
+		//printf("num t1:%d\n\r", num);
+		//num1 = read(fd, tempbuffer, 64 - num);
+		//printf("num t2:%d\n\r", num1);
+#endif 
+				while(total_read < bytes_to_read) {
+			int bytes_read = read(fd, buf + total_read, bytes_to_read - total_read);
 
-	return num;
+			if (bytes_read < 0) {
+				if (errno == EAGAIN || errno == EWOULDBLOCK) {
+						
+					continue;
+				}					
+			}
+			else if (total_read == 64) {					
+				printf("done\n\r");
+				break;
+			}
+
+			total_read += bytes_read;
+		}	
+	}
+}
+
+return num;
 }
 
 typedef enum
 {
-	RES_FALSE = 0,
+	RES_FALSE          = 0,
 	RES_PASS,
 	RES_FILE_NO_FOUND,
 	RES_PROGRAM_FALSE,
@@ -150,7 +215,8 @@ ISP_STATE SN_PACKAGE_UART(void)
 		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff)};
+		((PacketNumber >> 24) & 0xff) 
+	};
 	send_num = write_port(com_handler, cmd, Package_Size);
 	if (send_num != 64)
 	{
@@ -177,11 +243,8 @@ ISP_STATE SN_PACKAGE_UART(void)
 	PacketNumber += 2;
 	return RES_SN_OK;
 }
-*Performs UART link checking.
-		*
-			*@ return The ISP_STATE result of the link checking *
-	/
-	ISP_STATE CHECK_UART_LINK(void)
+
+ISP_STATE CHECK_UART_LINK(void)
 {
 	struct timeval tout;
 	clock_t start_time, end_time;
@@ -202,10 +265,11 @@ ISP_STATE SN_PACKAGE_UART(void)
 		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff)};
+		((PacketNumber >> 24) & 0xff) 
+	};
 
 	// start_time = clock(); /* mircosecond */
-	while (1)
+	while(1)
 	{
 		usleep(50000);
 		send_num = write_port(com_handler, cmd, Package_Size);
@@ -253,7 +317,8 @@ unsigned int READFW_VERSION_UART(void)
 		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff)};
+		((PacketNumber >> 24) & 0xff)
+	 };
 	send_num = write_port(com_handler, cmd, Package_Size);
 	if (send_num != 64)
 	{
@@ -343,7 +408,8 @@ ISP_STATE READ_PID_UART(void)
 		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff)};
+		((PacketNumber >> 24) & 0xff) 
+	};
 	send_num = write_port(com_handler, cmd, Package_Size);
 	if (send_num != 64)
 	{
@@ -414,7 +480,8 @@ void READ_CONFIG_UART(void)
 		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff)};
+		((PacketNumber >> 24) & 0xff)
+	 };
 	send_num = write_port(com_handler, cmd, Package_Size);
 	if (send_num != 64)
 	{
@@ -461,7 +528,8 @@ void RUN_TO_LDROM_UART(void)
 		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff)};
+		((PacketNumber >> 24) & 0xff) 
+	};
 	send_num = write_port(com_handler, cmd, Package_Size);
 	if (send_num != 64)
 	{
@@ -489,7 +557,8 @@ void RUN_TO_APROM_UART(void)
 		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff)};
+		((PacketNumber >> 24) & 0xff)
+	 };
 	send_num = write_port(com_handler, cmd, Package_Size);
 	if (send_num != 64)
 	{
@@ -518,7 +587,8 @@ void READ_FLASH_RUN_MODE(void)
 		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff)};
+		((PacketNumber >> 24) & 0xff) 
+	};
 	send_num = write_port(com_handler, cmd, Package_Size);
 	if (send_num != 64)
 	{
@@ -599,7 +669,7 @@ unsigned short gcksum;
 
 *Sends data through a port.
 	 *
-		 *@ return 1 if the data is sent successfully,
+		 * @ return 1 if the data is sent successfully,
 	0 otherwise.
 			* /
 		int SendData(void)
@@ -661,7 +731,7 @@ int RcvData(void)
 	// }
 	// else
 	//{
-	if (lcksum != gcksum)
+	if(lcksum != gcksum)
 	{
 		dbg_printf("gcksum=%x lcksum=%x\n", gcksum, lcksum);
 		Result = 0;
@@ -718,7 +788,7 @@ int RcvData_without_timeout(void)
 	// }
 	// else
 	//{
-	if (lcksum != gcksum)
+	if(lcksum != gcksum)
 	{
 		dbg_printf("gcksum=%x lcksum=%x\n", gcksum, lcksum);
 		Result = 0;
@@ -750,7 +820,8 @@ void WRITE_CHECKSUM(void)
 		(PacketNumber & 0xff),
 		((PacketNumber >> 8) & 0xff),
 		((PacketNumber >> 16) & 0xff),
-		((PacketNumber >> 24) & 0xff)};
+		((PacketNumber >> 24) & 0xff) 
+	};
 	unsigned int buffer[2];
 	buffer[0] = file_totallen;
 	buffer[1] = file_checksum;
@@ -791,15 +862,7 @@ void WRITE_CHECKSUM(void)
 	PacketNumber += 2;
 }
 
-*Function : CmdUpdateAprom * -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --*This function performs the update of the APROM on the device
-																														   *using the specified file.
-																															   *
-																																   *Parameters : *-filename : The name of the file containing the APROM data
-																																								  *
-																																									  *Returns : *-Result : 1 if the update is successful,
-	0 otherwise
-			************************************************************** /
-		int CmdUpdateAprom(char *filename)
+int CmdUpdateAprom(char *filename)
 {
 	int Result = 1;
 	unsigned int i, j;
@@ -811,7 +874,7 @@ void WRITE_CHECKSUM(void)
 	FILE *fp;
 
 	// if ((fp = fopen("//home//pi//aprom.bin", "rb")) == NULL)
-	if ((fp = fopen(filename, "rb")) == NULL)
+	if((fp = fopen(filename, "rb")) == NULL)
 	{
 		printf("APROM FILE OPEN FALSE\n\r");
 		Result = 0;
@@ -833,7 +896,7 @@ void WRITE_CHECKSUM(void)
 	fseek(fp, 0, SEEK_SET);
 
 	memset(send_buf, 0, Package_Size);
-	cmdData = CMD_UPDATE_APROM; // CMD_UPDATE_APROM
+	cmdData = CMD_UPDATE_APROM;  // CMD_UPDATE_APROM
 	WordsCpy(send_buf + 0, &cmdData, 4);
 	WordsCpy(send_buf + 4, &PacketNumber, 4);
 	PacketNumber++;
@@ -852,7 +915,7 @@ void WRITE_CHECKSUM(void)
 	// sleep(1); //for erase time, sleep 1 sec
 	Result = RcvData();
 	// Result = RcvData_without_timeout();
-	if (Result == 0)
+	if(Result == 0)
 		goto out1;
 #if 1
 	for (i = 48; i < file_totallen; i = i + 56)
@@ -861,7 +924,7 @@ void WRITE_CHECKSUM(void)
 		printf("Process=%.2f \r", (float)((float)i / (float)file_totallen) * 100);
 
 		// clear buffer
-		for (j = 0; j < 64; j++)
+		for(j = 0 ; j < 64 ; j++)
 		{
 			send_buf[j] = 0;
 		}
@@ -906,58 +969,76 @@ void WRITE_CHECKSUM(void)
 out1:
 	return Result;
 }
+void check_endian(void)
+{
+	unsigned int a = 0x12347890;
+	unsigned char *p = (unsigned char *)&a;
+	printf("a=0x%x\n\r", a);
+	printf("p=0x%x\n\r", *p);
+	if (*p == 0x90) 
+		printf("Little endian \n\r");
+	if (*p == 0x12) 
+		printf("Big endian \n\r");
+}
 
 int main(int argc, char *argv[])
 {
-	PacketNumber = 1;				  // Initialize packet number
-	com_handler = open_port(argv[1]); // Open the specified COM port
-	if (com_handler < 0)
+
+#if 0
+	getOsInfo();
+	getCpuInfo();
+	getMemoryInfo();
+	check_endian();
+#endif
+	PacketNumber = 1; 				  // Initialize packet number
+	com_handler = open_port(argv[1]);  // Open the specified COM port
+	if(com_handler < 0)
 	{
-		perror("open_port error!\n"); // Print error message if port opening fails
-		return -1;
+		perror("open_port error!\n");  // Print error message if port opening fails
+		return - 1;
 	}
-	printf("the com port open!!\n\r"); // Print success message for port opening
+	printf("the com port open!!\n\r");  // Print success message for port opening
 
-	set_opt(com_handler); // Set port options
+	set_opt(com_handler);  // Set port options
 
-	CHECK_UART_LINK(); // Check UART link status
-	usleep(50000);	   // Wait for 50 milliseconds
+	CHECK_UART_LINK();  // Check UART link status
+	usleep(50000); 	   // Wait for 50 milliseconds
 
-	if (SN_PACKAGE_UART() == RES_SN_OK)
-		printf("connect 1\n\r"); // Print success message for first connection
-
-	usleep(50000);
-	if (SN_PACKAGE_UART() == RES_SN_OK)
-		printf("connect 2 \n\r"); // Print success message for second connection
+	if(SN_PACKAGE_UART() == RES_SN_OK)
+		printf("connect 1\n\r");  // Print success message for first connection
 
 	usleep(50000);
-	printf("FW version:0x%x\n\r", READFW_VERSION_UART()); // Read and print firmware version
+	if (SN_PACKAGE_UART() == RES_SN_OK)
+		printf("connect 2 \n\r");  // Print success message for second connection
 
-	if (READ_PID_UART() == RES_FALSE)
+	usleep(50000);
+	printf("FW version:0x%x\n\r", READFW_VERSION_UART());  // Read and print firmware version
+
+	if(READ_PID_UART() == RES_FALSE)
 	{
-		printf("CHIP NO FOUND\n\r"); // Print error message if chip is not found
+		printf("CHIP NO FOUND\n\r");  // Print error message if chip is not found
 		goto EXIT;
 	}
 
 	usleep(50000);
-	READ_CONFIG_UART(); // Read configuration from UART
+	READ_CONFIG_UART();  // Read configuration from UART
 	usleep(50000);
 
 	if (CmdUpdateAprom(argv[2]) == 1)
 	{
-		printf("Process=%.2f \r", 100.0); // Print progress information
-		printf("programmer pass\n\r");	  // Print success message for programming
+		printf("Process=%.2f \r", 100.0);  // Print progress information
+		printf("programmer pass\n\r"); 	  // Print success message for programming
 	}
 	else
 	{
-		printf("programmer flase\n\r"); // Print error message for programming failure
+		printf("programmer flase\n\r");  // Print error message for programming failure
 		goto EXIT;
 	}
 
 	usleep(50000);
-	RUN_TO_APROM_UART(); // Jump to APROM and run
+	RUN_TO_APROM_UART();  // Jump to APROM and run
 
-EXIT:
-	close(com_handler); // Close the COM port
+EXIT :
+	close(com_handler);  // Close the COM port
 	return 0;
 }
