@@ -913,8 +913,8 @@ int CmdUpdateAprom(char *filename)
 		goto out1;
 
 	// sleep(1); //for erase time, sleep 1 sec
-	Result = RcvData();
-	// Result = RcvData_without_timeout();
+	// Result = RcvData();
+	Result = RcvData_without_timeout();
 	if(Result == 0)
 		goto out1;
 #if 1
