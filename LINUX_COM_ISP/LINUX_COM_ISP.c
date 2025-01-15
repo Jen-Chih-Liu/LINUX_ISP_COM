@@ -4,7 +4,7 @@
 #include <unistd.h>	 /* UNIX standard function definitions */
 #include <fcntl.h>	 /* File control definitions */
 #include <errno.h>	 /* Error number definitions */
-#include <termios.h> /     
+#include <termios.h>      
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -131,6 +131,8 @@ int read_port(int fd, unsigned char *buf, size_t len, struct timeval *tout)
 	unsigned char tempbuffer[64];
 	num = 0;
 	j = 0;
+	int total_read = 0;
+	int bytes_to_read = 64;
 	FD_ZERO(&inputs);
 	FD_SET(fd, &inputs);
 
@@ -150,7 +152,7 @@ int read_port(int fd, unsigned char *buf, size_t len, struct timeval *tout)
 		//num1 = read(fd, tempbuffer, 64 - num);
 		//printf("num t2:%d\n\r", num1);
 #endif 
-				while(total_read < bytes_to_read) {
+			while(total_read < bytes_to_read) {
 			int bytes_read = read(fd, buf + total_read, bytes_to_read - total_read);
 
 			if (bytes_read < 0) {
@@ -167,9 +169,9 @@ int read_port(int fd, unsigned char *buf, size_t len, struct timeval *tout)
 			total_read += bytes_read;
 		}	
 	}
-}
 
-return num;
+
+	return total_read;
 }
 
 typedef enum
@@ -284,7 +286,8 @@ ISP_STATE CHECK_UART_LINK(void)
 		{
 			dbg_printf("read flase %d bytes\n\r", recv_num);
 		}
-		printf("package: 0x%x\n\r", i++);
+		//printf("package: 0x%x\n\r", i++);
+		//printf("package: 0x%x\n\r",(recv_buf[4] | ((recv_buf[5] << 8) & 0xff00) | ((recv_buf[6] << 16) & 0xff0000) |  ((recv_buf[7] << 24) & 0xff000000));
 		if ((recv_buf[4] | ((recv_buf[5] << 8) & 0xff00) | ((recv_buf[6] << 16) & 0xff0000) | ((recv_buf[7] << 24) & 0xff000000)) == (PacketNumber + 1))
 			break;
 		// end_time = clock();
@@ -308,7 +311,7 @@ unsigned int READFW_VERSION_UART(void)
 	float total_time = 0;
 	int send_num, recv_num;
 	tout.tv_sec = 1;
-	tout.tv_usec = 100 * 1000;
+	tout.tv_usec = 10000 * 1000;
 	unsigned char cmd[Package_Size] = {
 		0xa6,
 		0,
@@ -328,17 +331,18 @@ unsigned int READFW_VERSION_UART(void)
 	while (1)
 	{
 		recv_num = read_port(com_handler, recv_buf, Package_Size, &tout);
-		if (recv_num < 0)
-			printf("read failed! (%s)\n", strerror(errno));
-
-		dbg_printf("package: 0x%x\n\r", recv_buf[4]);
-		if ((recv_buf[4] | ((recv_buf[5] << 8) & 0xff00) | ((recv_buf[6] << 16) & 0xff0000) | ((recv_buf[7] << 24) & 0xff000000)) == (PacketNumber + 1))
-			break;
-
-		end_time = clock();
-		/* CLOCKS_PER_SEC is defined at time.h */
-		if ((end_time - start_time) > Time_Out_Value)
-			return 0;
+		if (recv_num != 0)
+			printf("count=%d\n\r", recv_num);
+		if (recv_num == 64)
+		{		
+			dbg_printf("package: 0x%x\n\r", recv_buf[4]);
+			if ((recv_buf[4] | ((recv_buf[5] << 8) & 0xff00) | ((recv_buf[6] << 16) & 0xff0000) | ((recv_buf[7] << 24) & 0xff000000)) == (PacketNumber + 1))
+				break;
+		}
+		//end_time = clock(); 
+		/* CLOCKS_PER_SEC is defined at time.h */ 
+		//if ((end_time - start_time) > Time_Out_Value)
+		//	return 0;
 	}
 	dbg_printf("fw version:0x%x\n\r", recv_buf[8]);
 	dbg_printf("\n\r");
@@ -432,8 +436,9 @@ ISP_STATE READ_PID_UART(void)
 	}
 	printf("pid: 0x%x\n\r", (recv_buf[8] | ((recv_buf[9] << 8) & 0xff00) | ((recv_buf[10] << 16) & 0xff0000) | ((recv_buf[11] << 24) & 0xff000000)));
 	printf("\n\r");
-#if 0
+
 	PacketNumber += 2;
+#if 0
 	//return (buffer[8]|((buffer[9]<<8)&0xff00)|((buffer[10]<<16)&0xff0000)|((buffer[11]<<24)&0xff000000));
 	unsigned int temp_PDID = recv_buf[8] | ((recv_buf[9] << 8) & 0xff00) | ((recv_buf[10] << 16) & 0xff0000) | ((recv_buf[11] << 24) & 0xff000000);
 	CPartNumItem temp;
@@ -666,13 +671,13 @@ void WordsCpy(void *dest, void *src, unsigned int size)
 		pu8Dest[i] = pu8Src[i];
 }
 unsigned short gcksum;
-
+/**
 *Sends data through a port.
-	 *
-		 * @ return 1 if the data is sent successfully,
-	0 otherwise.
-			* /
-		int SendData(void)
+*
+* @ return 1 if the data is sent successfully,
+*          0 otherwise.
+*/
+int SendData(void)
 {
 	int Result;
 	int send_num;
@@ -916,7 +921,10 @@ int CmdUpdateAprom(char *filename)
 	// Result = RcvData();
 	Result = RcvData_without_timeout();
 	if(Result == 0)
+	{
+		printf("erase timeout!!");
 		goto out1;
+	}
 #if 1
 	for (i = 48; i < file_totallen; i = i + 56)
 	{
@@ -956,13 +964,14 @@ int CmdUpdateAprom(char *filename)
 			Result = RcvData();
 			if (Result == 0)
 				goto out1;
-
+			/*
 			WordsCpy(&get_cksum, recv_buf + 8, 2);
-			if ((file_checksum & 0xffff) != get_cksum)
-			{
+			if ((file_checksum & 0xffff) != get_cksum)	
+			{			 
 				Result = 0;
 				return Result;
 			}
+			*/
 		}
 	}
 #endif
